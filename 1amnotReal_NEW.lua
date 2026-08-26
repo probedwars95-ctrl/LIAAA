@@ -1858,7 +1858,7 @@ local function LoadMainScript()
 end
 
 -- 密碼驗證邏輯
-local CorrectPassword = "123"
+local CorrectPassword = "K9#m$2x!pL7@qZ8*vB4%yT1&fH3^dN6"
 
 LoginBtn.MouseButton1Click:Connect(function()
     if TextBox.Text == CorrectPassword then
