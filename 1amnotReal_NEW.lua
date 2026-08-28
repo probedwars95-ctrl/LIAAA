@@ -21,7 +21,6 @@ _G.G_AutoHaki         = _G.G_AutoHaki or false
 _G.G_AutoV3           = _G.G_AutoV3 or false
 _G.G_AutoV4           = _G.G_AutoV4 or false
 
--- 血量低於20%自動更換種族變數初始化
 _G.G_AutoLowHpRace = _G.G_AutoLowHpRace or false
 _G.G_LowHpRaceChoice = _G.G_LowHpRaceChoice or "吸血鬼"
 
@@ -252,7 +251,6 @@ local PVvX7r = {
     [L("繪製")]     = Tabs[L("主要功能")]:Tab({ Title = L("FOV"), Icon = "pen-tool" }),
     ["特別"]     = Tabs[L("主要功能")]:Tab({ Title = L("特別"), Icon = "star" }),
     [L("設置")]     = Tabs[L("設置")]:Tab({ Title = L("設置"), Icon = "settings" }),
-    -- 新增獨立的「飛行與移動」分頁
     ["飛行與移動"] = Tabs[L("主要功能")]:Tab({ Title = "飛行與移動", Icon = "rocket" }),
 }
 
@@ -586,7 +584,12 @@ task.spawn(function()
     end
     
     while true do
-        task.wait(_G.G_DragonGunSpeed or 0.085)
+        local currentSpeed = _G.G_DragonGunSpeed
+        if not currentSpeed or currentSpeed < 0 then
+            currentSpeed = 0.001
+        end
+        task.wait(currentSpeed)
+        
         if not _G.G_DragonGunM1 then continue end
         pcall(function()
             local char = LocalPlayer.Character
@@ -612,16 +615,17 @@ PVvX7r[L("PVP")]:Toggle({
     end
 })
 
+-- 修正後的滑桿：範圍 0 到 200，預設值對應 0.085 秒，支援拉到最左側極小化
 PVvX7r[L("PVP")]:Slider({
     Title = L("龍槍攻速調整"),
     Value = {
         Min = 0,
-        Max = 0.2,
-        Default = _G.G_DragonGunSpeed or 0.085,
-        Decimals = 3
+        Max = 200,
+        Default = math.floor((_G.G_DragonGunSpeed or 0.085) * 1000),
+        Decimals = 0
     },
     Callback = function(v)
-        _G.G_DragonGunSpeed = v
+        _G.G_DragonGunSpeed = v / 1000
         SaveConfiguration()
     end
 })
@@ -836,7 +840,6 @@ PVvX7r[L("主要功能")]:Toggle({
     end
 })
 
--- ===== 獨立頁面：飛行與移動功能 (符合圖片設計與點擊開啟) =====
 local FlyTab = PVvX7r["飛行與移動"]
 
 _G.G_FlyEnabled = _G.G_FlyEnabled or false
@@ -1036,7 +1039,6 @@ FlyTab:Button({
     end
 })
 
--- 特別清單裡的更換種族維持保留
 PVvX7r["特別"]:Dropdown({ Title = L("選擇低血量切換種族"), Values = { "吸血鬼", "機器人" }, Value = _G.G_LowHpRaceChoice, Callback = function(v) _G.G_LowHpRaceChoice = v; SaveConfiguration() end })
 PVvX7r["特別"]:Toggle({ Title = L("血量低於20%自動更換種族"), Value = _G.G_AutoLowHpRace, Callback = function(v) _G.G_AutoLowHpRace = v; SaveConfiguration() end })
 
@@ -1852,7 +1854,6 @@ FOVTab:Toggle({
     Value = _G.G_SilentAimTargetMobs,
     Callback = function(v)
         _G.G_SilentAimTargetMobs = v
-        StatusConfiguration()
         SaveConfiguration()
     end
 })
@@ -1862,6 +1863,20 @@ FOVTab:Toggle({
     Value = _G.G_SilentAimTeamCheck,
     Callback = function(v)
         _G.G_SilentAimTeamCheck = v
+        SaveConfiguration()
+    end
+})
+
+FOVTab:Slider({
+    Title = L("龍槍攻速調整"),
+    Value = {
+        Min = 0,
+        Max = 200,
+        Default = math.floor((_G.G_DragonGunSpeed or 0.085) * 1000),
+        Decimals = 0
+    },
+    Callback = function(v)
+        _G.G_DragonGunSpeed = v / 1000
         SaveConfiguration()
     end
 })
