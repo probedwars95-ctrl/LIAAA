@@ -12,14 +12,11 @@ local CONFIG_FILE = "PVvX7r_NEW_C.json"
 
 _G.G_FastAttack       = _G.G_FastAttack ~= true
 _G.G_FastAttackMode   = _G.G_FastAttackMode or "模式2(部分帳號失效用)"
-
--- 以下变量原本由 PVP 标签页控制，现已被移除，但保留默认值以兼容快速攻击（默认攻击所有目标）
 _G.G_AttackMobs       = _G.G_AttackMobs ~= true
 _G.G_AttackPlayers    = _G.G_AttackPlayers ~= true
-_G.G_DragonGunM1      = _G.G_DragonGunM1 or false        -- 不再使用，保留定义
-_G.G_DragonGunSpeed   = _G.G_DragonGunSpeed or 0.085     -- 不再使用
-_G.G_FruitM1          = _G.G_FruitM1 or false            -- 不再使用
-
+_G.G_DragonGunM1      = _G.G_DragonGunM1 or false
+_G.G_DragonGunSpeed   = _G.G_DragonGunSpeed or 0.085
+_G.G_FruitM1          = _G.G_FruitM1 or false
 _G.G_AutoHaki         = _G.G_AutoHaki or false
 _G.G_AutoV3           = _G.G_AutoV3 or false
 _G.G_AutoV4           = _G.G_AutoV4 or false
@@ -53,6 +50,7 @@ _G.G_SilentAimTeamCheck     = _G.G_SilentAimTeamCheck or false
 _G.G_SilentAimMethod        = _G.G_SilentAimMethod or "滑鼠最近的玩家"
 _G.G_LockHotkey              = _G.G_LockHotkey or false
 _G.G_LockHotkeyMode          = _G.G_LockHotkeyMode or "鎖人1"
+_G.G_AutoSoru                = _G.G_AutoSoru or false  -- 新增
 
 _G.G_AutoLoadConfig   = _G.G_AutoLoadConfig or false
 _G.G_AutoSaveConfig   = _G.G_AutoSaveConfig or false
@@ -72,6 +70,7 @@ local Translations = {
         ["公告"] = "Notice",
         ["目前無法使用更改機器人"] = "Currently unable to change robot",
         ["主要功能"] = "Main",
+        ["PVP"] = "PVP",
         ["ESP"] = "ESP",
         ["繪製"] = "Aimbot",
         ["設置"] = "Settings",
@@ -79,6 +78,11 @@ local Translations = {
         ["特別"] = "Special",
         ["開啟快速攻擊"] = "Enable Fast Attack",
         ["快速攻擊模式"] = "Fast Attack Mode",
+        ["攻擊怪物(此頁面所有功能)"] = "Attack Mobs (All features)",
+        ["攻擊玩家(此頁面所有功能)"] = "Attack Players (All features)",
+        ["槍械 m1"] = "Dragon Gun M1",
+        ["龍槍攻速調整"] = "Dragon Gun Speed",
+        ["果實m1"] = "Fruit M1",
         ["自動武裝色"] = "Auto Haki",
         ["自動 V3"] = "Auto V3",
         ["自動 V4"] = "Auto V4",
@@ -148,6 +152,7 @@ local function CollectConfig()
             AutoV4         = _G.G_AutoV4,
             AutoLowHpRace  = _G.G_AutoLowHpRace,
             LowHpRaceChoice = _G.G_LowHpRaceChoice,
+            AutoSoru       = _G.G_AutoSoru,  -- 新增
         },
         ESP = {
             ESPEnabled   = _G.G_ESPEnabled,
@@ -249,7 +254,7 @@ local Tabs = {
 local PVvX7r = {
     [L("公告")] = Tabs[L("公告")]:Tab({ Title = L("公告"), Icon = "bell" }),
     [L("主要功能")] = Tabs[L("主要功能")]:Tab({ Title = L("主要功能"), Icon = "zap" }),
-    -- PVP 标签页已被移除
+    [L("PVP")] = Tabs[L("主要功能")]:Tab({ Title = L("PVP"), Icon = "sword" }),
     ["ESP"]     = Tabs[L("主要功能")]:Tab({ Title = "ESP", Icon = "eye" }),
     [L("繪製")]     = Tabs[L("主要功能")]:Tab({ Title = L("FOV"), Icon = "pen-tool" }),
     ["特別"]     = Tabs[L("主要功能")]:Tab({ Title = L("特別"), Icon = "star" }),
@@ -264,9 +269,6 @@ PVvX7r[L("公告")]:Paragraph({
     Desc = L("目前無法使用更改機器人")
 })
 
--- ============================================================
--- 快速攻击功能（保留并移至“主要功能”最顶端）
--- ============================================================
 local function IsAlive(character)
     if not character then return false end
     local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -471,10 +473,7 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
--- 将快速攻击控件放在“主要功能”最顶端
--- ============================================================
-PVvX7r[L("主要功能")]:Toggle({
+PVvX7r[L("PVP")]:Toggle({
     Title = L("開啟快速攻擊"),
     Value = _G.G_FastAttack,
     Callback = function(v)
@@ -483,7 +482,7 @@ PVvX7r[L("主要功能")]:Toggle({
     end
 })
 
-PVvX7r[L("主要功能")]:Dropdown({
+PVvX7r[L("PVP")]:Dropdown({
     Title = L("快速攻擊模式"),
     Values = {"模式1", "模式2(部分帳號失效用)"},
     Value = _G.G_FastAttackMode,
@@ -493,9 +492,245 @@ PVvX7r[L("主要功能")]:Dropdown({
     end
 })
 
--- ============================================================
--- 其余主要功能（自动武装色、V3、V4）
--- ============================================================
+PVvX7r[L("PVP")]:Toggle({
+    Title = L("攻擊怪物(此頁面所有功能)"),
+    Value = _G.G_AttackMobs,
+    Callback = function(v) 
+        _G.G_AttackMobs = v 
+        SaveConfiguration()
+    end
+})
+
+PVvX7r[L("PVP")]:Toggle({
+    Title = L("攻擊玩家(此頁面所有功能)"),
+    Value = _G.G_AttackPlayers,
+    Callback = function(v) 
+        _G.G_AttackPlayers = v 
+        SaveConfiguration()
+    end
+})
+
+task.spawn(function()
+    local Modules = ReplicatedStorage:WaitForChild("Modules")
+    local DragonNet = Modules:WaitForChild("Net")
+    local ShootGunEvent = DragonNet:WaitForChild("RE/ShootGunEvent")
+    local Validator2 = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Validator2")
+    local getupval = debug.getupvalue or getupvalue
+    local setupval = debug.setupvalue or setupval
+    local getupvals = debug.getupvalues or getupvals
+    local ShootFunction
+    local V_Idx = { v26 = 12, v22 = 13, v25 = 14, v21 = 15, v23 = 16, v24 = 17, v27 = 18 }
+    
+    local function InitDragonGun()
+        local success, result = pcall(require, ReplicatedStorage:WaitForChild("Controllers"):WaitForChild("CombatController"))
+        if success and type(result) == "table" and result.Attack then ShootFunction = getupval(result.Attack, 9) end
+    end
+    
+    local function GetNextValidator()
+        if not ShootFunction then InitDragonGun() end
+        if not ShootFunction then return 0, 0 end
+        local upvals = getupvals(ShootFunction)
+        if not upvals then return 0, 0 end
+        if upvals[V_Idx.v21] ~= 727595 then
+            for i, v in pairs(upvals) do
+                if v == 727595 then
+                    local offset = i - 15
+                    V_Idx.v21 = i; V_Idx.v22 = 13 + offset; V_Idx.v23 = 16 + offset; V_Idx.v24 = 17 + offset
+                    V_Idx.v26 = 12 + offset; V_Idx.v25 = 14 + offset; V_Idx.v27 = 18 + offset
+                    break
+                end
+            end
+        end
+        local v1 = getupval(ShootFunction, V_Idx.v21)
+        local v2 = getupval(ShootFunction, V_Idx.v22)
+        local v3 = getupval(ShootFunction, V_Idx.v23)
+        local v4 = getupval(ShootFunction, V_Idx.v24)
+        local v5 = getupval(ShootFunction, V_Idx.v25)
+        local v6 = getupval(ShootFunction, V_Idx.v26)
+        local v7 = getupval(ShootFunction, V_Idx.v27)
+        if not (v1 and v2 and v3 and v4 and v5 and v6 and v7) then return 0, 0 end
+        local v8 = v6 * v2
+        local v9 = (v5 * v2 + v6 * v1) % v3
+        v9 = (v9 * v3 + v8) % v4
+        v5 = math.floor(v9 / v3)
+        v6 = v9 - v5 * v3
+        v7 = v7 + 1
+        setupval(ShootFunction, V_Idx.v25, v5); setupval(ShootFunction, V_Idx.v26, v6); setupval(ShootFunction, V_Idx.v27, v7)
+        return math.floor(v9 / v4 * 16777215), v7
+    end
+    
+    local function GetClosestTarget()
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not root then return nil end
+        local closest, dist = nil, math.huge
+        local myPos = root.Position
+        if _G.G_AttackMobs then
+            local enemiesFolder = workspace:FindFirstChild("Enemies")
+            if enemiesFolder then
+                for _, enemy in enemiesFolder:GetChildren() do
+                    local eHum = enemy:FindFirstChildOfClass("Humanoid")
+                    local eRoot = enemy:FindFirstChild("HumanoidRootPart")
+                    if eHum and eHum.Health > 0 and eRoot then
+                        local d = (eRoot.Position - myPos).Magnitude
+                        if d < dist then dist = d; closest = eRoot end
+                    end
+                end
+            end
+        end
+        if _G.G_AttackPlayers then
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character then
+                    local pHum = player.Character:FindFirstChildOfClass("Humanoid")
+                    local pRoot = player.Character:FindFirstChild("HumanoidRootPart")
+                    if pHum and pHum.Health > 0 and pRoot then
+                        local d = (pRoot.Position - myPos).Magnitude
+                        if d < dist then dist = d; closest = pRoot end
+                    end
+                end
+            end
+        end
+        return closest
+    end
+    
+    while true do
+        local currentSpeed = _G.G_DragonGunSpeed
+        if not currentSpeed or currentSpeed < 0 then
+            currentSpeed = 0.001
+        end
+        task.wait(currentSpeed)
+        
+        if not _G.G_DragonGunM1 then continue end
+        pcall(function()
+            local char = LocalPlayer.Character
+            local tool = char and char:FindFirstChildOfClass("Tool")
+            if not tool or tool.ToolTip ~= "Gun" then return end
+            local targetPart = GetClosestTarget()
+            if not targetPart then return end
+            local valCode, valCount = GetNextValidator()
+            if valCode ~= 0 then Validator2:FireServer(valCode, valCount) end
+            tool:SetAttribute("LocalOverheat", 0)
+            tool:SetAttribute("LocalTotalShots", (tool:GetAttribute("LocalTotalShots") or 0) + 1)
+            ShootGunEvent:FireServer(targetPart.Position, { targetPart })
+        end)
+    end
+end)
+
+PVvX7r[L("PVP")]:Toggle({
+    Title = L("槍械 m1"),
+    Value = _G.G_DragonGunM1,
+    Callback = function(v) 
+        _G.G_DragonGunM1 = v 
+        SaveConfiguration()
+    end
+})
+
+-- 修正後的滑桿：範圍 0 到 200，預設值對應 0.085 秒，支援拉到最左側極小化
+PVvX7r[L("PVP")]:Slider({
+    Title = L("龍槍攻速調整"),
+    Value = {
+        Min = 0,
+        Max = 200,
+        Default = math.floor((_G.G_DragonGunSpeed or 0.085) * 1000),
+        Decimals = 0
+    },
+    Callback = function(v)
+        _G.G_DragonGunSpeed = v / 1000
+        SaveConfiguration()
+    end
+})
+
+local FruitAttackConnection = nil
+local FruitAttack = false
+
+local function GetPlayerFruit()
+    local char = LocalPlayer.Character
+    if not char then return nil end
+    for _, tool in pairs(char:GetChildren()) do
+        if tool:IsA("Tool") and tool.ToolTip == "Blox Fruit" then
+            return tool
+        end
+    end
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in pairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and tool.ToolTip == "Blox Fruit" then
+                return tool
+            end
+        end
+    end
+    return nil
+end
+
+local function SetFruitM1Enabled(enabled)
+    FruitAttack = enabled
+    if enabled then
+        if FruitAttackConnection then
+            task.cancel(FruitAttackConnection)
+        end
+        FruitAttackConnection = task.spawn(function()
+            while FruitAttack do
+                task.wait(0.1)
+                local fruit = GetPlayerFruit()
+                if not fruit then continue end
+                local remote = fruit:FindFirstChild("LeftClickRemote")
+                if not remote then continue end
+                local char = LocalPlayer.Character
+                local myHRP = char and char:FindFirstChild("HumanoidRootPart")
+                if not myHRP then continue end
+                if _G.G_AttackPlayers then
+                    for _, player in pairs(game:GetService("Players"):GetPlayers()) do
+                        if player ~= LocalPlayer and player.Character then
+                            local targetHRP = player.Character:FindFirstChild("HumanoidRootPart")
+                            local hum       = player.Character:FindFirstChild("Humanoid")
+                            if targetHRP and hum and hum.Health > 0 then
+                                  if (targetHRP.Position - myHRP.Position).Magnitude < 500 then
+                                      local dir = (targetHRP.Position - myHRP.Position).Unit
+                                    pcall(function() remote:FireServer(Vector3.new(dir.X, dir.Y, dir.Z), 1, true) end)
+                                end
+                            end
+                        end
+                    end
+                end
+                if _G.G_AttackMobs then
+                    local enemiesFolder = workspace:FindFirstChild("Enemies")
+                    if enemiesFolder then
+                        for _, npc in pairs(enemiesFolder:GetChildren()) do
+                            local targetHRP = npc:FindFirstChild("HumanoidRootPart")
+                            local hum       = npc:FindFirstChild("Humanoid")
+                              if targetHRP and hum and hum.Health > 0 then
+                                  if (targetHRP.Position - myHRP.Position).Magnitude < 500 then
+                                      local dir = (targetHRP.Position - myHRP.Position).Unit
+                                      pcall(function() remote:FireServer(Vector3.new(dir.X, dir.Y, dir.Z), 1, true) end)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    else
+        if FruitAttackConnection then
+            task.cancel(FruitAttackConnection)
+            FruitAttackConnection = nil
+        end
+    end
+end
+
+if _G.G_FruitM1 then
+    SetFruitM1Enabled(true)
+end
+
+PVvX7r[L("PVP")]:Toggle({
+    Title = L("果實m1"),
+    Value = _G.G_FruitM1,
+    Callback = function(vatt)
+        _G.G_FruitM1 = vatt
+        SetFruitM1Enabled(vatt)
+        SaveConfiguration()
+    end
+})
+
 local function startAutoHakiLoop()
     task.spawn(function()
         local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -615,9 +850,104 @@ PVvX7r[L("主要功能")]:Toggle({
     end
 })
 
--- ============================================================
--- 飞行与移动（保持不变）
--- ============================================================
+-- ==========================================
+-- 自动瞬步 (AutoSoru) 功能 - 新增
+-- ==========================================
+local AutoSoruConn = nil
+
+local function SoruTo(targetPosition)
+    local Character = LocalPlayer.Character
+    if not Character then return end
+
+    local HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+    local Humanoid = Character:FindFirstChild("Humanoid")
+    if not HumanoidRootPart or not Humanoid or Humanoid.Health <= 0 then return end
+
+    local startCFrame = HumanoidRootPart.CFrame
+    local finalPos = targetPosition
+    local finalCFrame = (startCFrame - startCFrame.Position) + finalPos + Vector3.new(0, HumanoidRootPart.Size.Y * 1.5, 0)
+
+    local randomId = math.random(1, 999999999)
+    ReplicatedStorage.Remotes.CommE:FireServer(
+        "Soru",
+        startCFrame,
+        finalCFrame,
+        workspace:GetServerTimeNow(),
+        randomId
+    )
+end
+
+local function GetClosestPlayerForSoru()
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+
+    local Character = LocalPlayer.Character
+    if not Character or not Character:FindFirstChild("HumanoidRootPart") then
+        return nil
+    end
+
+    local myPos = Character.HumanoidRootPart.Position
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local otherChar = player.Character
+            local otherHum = otherChar and otherChar:FindFirstChild("Humanoid")
+            local otherRoot = otherChar and otherChar:FindFirstChild("HumanoidRootPart")
+            if otherHum and otherRoot and otherHum.Health > 0 then
+                local distance = (otherRoot.Position - myPos).Magnitude
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    closestPlayer = player
+                end
+            end
+        end
+    end
+
+    return closestPlayer
+end
+
+local function SoruToClosestPlayer()
+    local targetPlayer = GetClosestPlayerForSoru()
+    local targetChar = targetPlayer and targetPlayer.Character
+    if targetChar and targetChar:FindFirstChild("HumanoidRootPart") then
+        local targetPos = (targetChar.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)).Position
+        SoruTo(targetPos)
+    end
+end
+
+local function StartAutoSoru()
+    if AutoSoruConn then return end
+    AutoSoruConn = task.spawn(function()
+        while _G.G_AutoSoru do
+            pcall(SoruToClosestPlayer)
+            task.wait(1)   -- 每秒一次，可自行调整
+        end
+    end)
+end
+
+local function StopAutoSoru()
+    if AutoSoruConn then
+        task.cancel(AutoSoruConn)
+        AutoSoruConn = nil
+    end
+end
+
+PVvX7r[L("主要功能")]:Toggle({
+    Title = "自动瞬步",
+    Desc = "每15秒强制打你2500血你气不气😂",
+    Value = _G.G_AutoSoru,
+    Callback = function(v)
+        _G.G_AutoSoru = v
+        if v then
+            StartAutoSoru()
+        else
+            StopAutoSoru()
+        end
+        SaveConfiguration()
+    end
+})
+-- ==========================================
+
 local FlyTab = PVvX7r["飛行與移動"]
 
 _G.G_FlyEnabled = _G.G_FlyEnabled or false
@@ -817,15 +1147,9 @@ FlyTab:Button({
     end
 })
 
--- ============================================================
--- 特别（低血量换种族）
--- ============================================================
 PVvX7r["特別"]:Dropdown({ Title = L("選擇低血量切換種族"), Values = { "吸血鬼", "機器人" }, Value = _G.G_LowHpRaceChoice, Callback = function(v) _G.G_LowHpRaceChoice = v; SaveConfiguration() end })
 PVvX7r["特別"]:Toggle({ Title = L("血量低於20%自動更換種族"), Value = _G.G_AutoLowHpRace, Callback = function(v) _G.G_AutoLowHpRace = v; SaveConfiguration() end })
 
--- ============================================================
--- 静默瞄准（hook）
--- ============================================================
 local mt = getrawmetatable(game)
 local oldNamecall = mt.__namecall
 setreadonly(mt, false)
@@ -847,9 +1171,6 @@ mt.__namecall = newcclosure(function(self, ...)
 end)
 setreadonly(mt, true)
 
--- ============================================================
--- ESP（保持不变）
--- ============================================================
 local ESPRunning = false
 local espObjects = {}
 local espUpdateConnection = nil
@@ -1216,9 +1537,6 @@ PVvX7r["ESP"]:Slider({
     end
 })
 
--- ============================================================
--- 设置
--- ============================================================
 local currentThemeName = WindUI:GetCurrentTheme()
 local availableThemes = WindUI:GetThemes()
 local themeList = {}
@@ -1296,9 +1614,6 @@ PVvX7r[L("設置")]:Button({
     end
 })
 
--- ============================================================
--- 绘制（FOV、自瞄、龙枪功能等）
--- ============================================================
 local function IsAlive(character)
     if not character then return false end
     local hum = character:FindFirstChildOfClass("Humanoid")
@@ -1576,7 +1891,6 @@ FOVTab:Colorpicker({
 
 FOVTab:Divider()
 
--- 注意：以下龙枪功能属于“繪製”标签页，并非原来的 PVP 标签页，因此保留
 FOVTab:Paragraph({
     Title = "龍槍功能",
     Desc = "在此處控制龍槍的攻擊對象與調整攻速功能。"
@@ -1695,7 +2009,7 @@ FOVTab:Dropdown({
 })
 
 -- ============================================================
--- 新增 DragonGun Tab 的 UI 控件（来自您提供的源码，保持不变）
+-- 新增 DragonGun Tab 的 UI 控件（来自您提供的源码）
 -- ============================================================
 local DragonGunTab = PVvX7r["DragonGun"]
 
@@ -1847,3 +2161,10 @@ task.spawn(function()
         end)
     end
 end)
+
+-- ==========================================
+-- 启动自动瞬步（若配置已开启）
+-- ==========================================
+if _G.G_AutoSoru then 
+    StartAutoSoru() 
+end
