@@ -1785,6 +1785,9 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+-- ==========================================
+-- FOV（繪製）标签页的控件（已删除龙枪功能）
+-- ==========================================
 local FOVTab = PVvX7r[L("繪製")]
 
 FOVTab:Paragraph({
@@ -1838,47 +1841,7 @@ FOVTab:Colorpicker({
     end
 })
 
-FOVTab:Divider()
-
-FOVTab:Paragraph({
-    Title = "龍槍功能",
-    Desc = "在此處控制龍槍的攻擊對象與調整攻速功能。"
-})
-
-FOVTab:Toggle({
-    Title = L("槍械 m1"),
-    Value = _G.G_DragonGunM1,
-    Callback = function(v) 
-        _G.G_DragonGunM1 = v 
-        SaveConfiguration()
-    end
-})
-
-FOVTab:Slider({
-    Title = L("龍槍攻速調整"),
-    Value = {
-        Min = 0,
-        Max = 200,
-        Default = math.floor((_G.G_DragonGunSpeed or 0.085) * 1000),
-        Decimals = 0
-    },
-    Callback = function(v)
-        _G.G_DragonGunSpeed = v / 1000
-        SaveConfiguration()
-    end
-})
-
-FOVTab:Toggle({
-    Title = L("果實m1"),
-    Value = _G.G_FruitM1,
-    Callback = function(vatt)
-        _G.G_FruitM1 = vatt
-        SetFruitM1Enabled(vatt)
-        SaveConfiguration()
-    end
-})
-
-FOVTab:Divider()
+FOVTab:Divider()   -- 此分隔线现在直接连接自瞄设置部分
 
 FOVTab:Paragraph({
     Title = L("自瞄設置"),
@@ -1950,7 +1913,7 @@ FOVTab:Dropdown({
 })
 
 -- ============================================================
--- 新增 DragonGun Tab 的 UI 控件（来自您提供的源码）
+-- 独立 DragonGun Tab（完整保留）
 -- ============================================================
 local DragonGunTab = PVvX7r["DragonGun"]
 
@@ -1996,7 +1959,7 @@ DragonGunTab:Toggle({
 })
 
 -- ============================================================
--- 移植自文件1（WindUi.lua）的龙枪核心循环（使用 V2 变量）
+-- DragonGun V2 核心循环（完整保留）
 -- ============================================================
 task.spawn(function()
     local Modules = ReplicatedStorage:WaitForChild("Modules")
