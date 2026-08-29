@@ -50,7 +50,7 @@ _G.G_SilentAimTeamCheck     = _G.G_SilentAimTeamCheck or false
 _G.G_SilentAimMethod        = _G.G_SilentAimMethod or "滑鼠最近的玩家"
 _G.G_LockHotkey              = _G.G_LockHotkey or false
 _G.G_LockHotkeyMode          = _G.G_LockHotkeyMode or "鎖人1"
-_G.G_AutoSoru                = _G.G_AutoSoru or false  -- 新增
+_G.G_AutoSoru                = _G.G_AutoSoru or false
 
 _G.G_AutoLoadConfig   = _G.G_AutoLoadConfig or false
 _G.G_AutoSaveConfig   = _G.G_AutoSaveConfig or false
@@ -70,7 +70,6 @@ local Translations = {
         ["公告"] = "Notice",
         ["目前無法使用更改機器人"] = "Currently unable to change robot",
         ["主要功能"] = "Main",
-        ["PVP"] = "PVP",
         ["ESP"] = "ESP",
         ["繪製"] = "Aimbot",
         ["設置"] = "Settings",
@@ -78,8 +77,6 @@ local Translations = {
         ["特別"] = "Special",
         ["開啟快速攻擊"] = "Enable Fast Attack",
         ["快速攻擊模式"] = "Fast Attack Mode",
-        ["攻擊怪物(此頁面所有功能)"] = "Attack Mobs (All features)",
-        ["攻擊玩家(此頁面所有功能)"] = "Attack Players (All features)",
         ["槍械 m1"] = "Dragon Gun M1",
         ["龍槍攻速調整"] = "Dragon Gun Speed",
         ["果實m1"] = "Fruit M1",
@@ -152,7 +149,7 @@ local function CollectConfig()
             AutoV4         = _G.G_AutoV4,
             AutoLowHpRace  = _G.G_AutoLowHpRace,
             LowHpRaceChoice = _G.G_LowHpRaceChoice,
-            AutoSoru       = _G.G_AutoSoru,  -- 新增
+            AutoSoru       = _G.G_AutoSoru,
         },
         ESP = {
             ESPEnabled   = _G.G_ESPEnabled,
@@ -254,7 +251,6 @@ local Tabs = {
 local PVvX7r = {
     [L("公告")] = Tabs[L("公告")]:Tab({ Title = L("公告"), Icon = "bell" }),
     [L("主要功能")] = Tabs[L("主要功能")]:Tab({ Title = L("主要功能"), Icon = "zap" }),
-    [L("PVP")] = Tabs[L("主要功能")]:Tab({ Title = L("PVP"), Icon = "sword" }),
     ["ESP"]     = Tabs[L("主要功能")]:Tab({ Title = "ESP", Icon = "eye" }),
     [L("繪製")]     = Tabs[L("主要功能")]:Tab({ Title = L("FOV"), Icon = "pen-tool" }),
     ["特別"]     = Tabs[L("主要功能")]:Tab({ Title = L("特別"), Icon = "star" }),
@@ -473,43 +469,6 @@ task.spawn(function()
     end
 end)
 
-PVvX7r[L("PVP")]:Toggle({
-    Title = L("開啟快速攻擊"),
-    Value = _G.G_FastAttack,
-    Callback = function(v)
-        _G.G_FastAttack = v
-        SaveConfiguration()
-    end
-})
-
-PVvX7r[L("PVP")]:Dropdown({
-    Title = L("快速攻擊模式"),
-    Values = {"模式1", "模式2(部分帳號失效用)"},
-    Value = _G.G_FastAttackMode,
-    Callback = function(v)
-        _G.G_FastAttackMode = v
-        SaveConfiguration()
-    end
-})
-
-PVvX7r[L("PVP")]:Toggle({
-    Title = L("攻擊怪物(此頁面所有功能)"),
-    Value = _G.G_AttackMobs,
-    Callback = function(v) 
-        _G.G_AttackMobs = v 
-        SaveConfiguration()
-    end
-})
-
-PVvX7r[L("PVP")]:Toggle({
-    Title = L("攻擊玩家(此頁面所有功能)"),
-    Value = _G.G_AttackPlayers,
-    Callback = function(v) 
-        _G.G_AttackPlayers = v 
-        SaveConfiguration()
-    end
-})
-
 task.spawn(function()
     local Modules = ReplicatedStorage:WaitForChild("Modules")
     local DragonNet = Modules:WaitForChild("Net")
@@ -616,30 +575,6 @@ task.spawn(function()
     end
 end)
 
-PVvX7r[L("PVP")]:Toggle({
-    Title = L("槍械 m1"),
-    Value = _G.G_DragonGunM1,
-    Callback = function(v) 
-        _G.G_DragonGunM1 = v 
-        SaveConfiguration()
-    end
-})
-
--- 修正後的滑桿：範圍 0 到 200，預設值對應 0.085 秒，支援拉到最左側極小化
-PVvX7r[L("PVP")]:Slider({
-    Title = L("龍槍攻速調整"),
-    Value = {
-        Min = 0,
-        Max = 200,
-        Default = math.floor((_G.G_DragonGunSpeed or 0.085) * 1000),
-        Decimals = 0
-    },
-    Callback = function(v)
-        _G.G_DragonGunSpeed = v / 1000
-        SaveConfiguration()
-    end
-})
-
 local FruitAttackConnection = nil
 local FruitAttack = false
 
@@ -720,16 +655,6 @@ end
 if _G.G_FruitM1 then
     SetFruitM1Enabled(true)
 end
-
-PVvX7r[L("PVP")]:Toggle({
-    Title = L("果實m1"),
-    Value = _G.G_FruitM1,
-    Callback = function(vatt)
-        _G.G_FruitM1 = vatt
-        SetFruitM1Enabled(vatt)
-        SaveConfiguration()
-    end
-})
 
 local function startAutoHakiLoop()
     task.spawn(function()
@@ -822,6 +747,9 @@ task.spawn(function()
     end
 end)
 
+-- ==========================================
+-- 主要功能标签页的控件
+-- ==========================================
 PVvX7r[L("主要功能")]:Toggle({
     Title = L("自動武裝色"),
     Value = _G.G_AutoHaki,
@@ -849,6 +777,27 @@ PVvX7r[L("主要功能")]:Toggle({
         SaveConfiguration()
     end
 })
+
+-- ========== 从 PVP 移入的两个控件 ==========
+PVvX7r[L("主要功能")]:Toggle({
+    Title = L("開啟快速攻擊"),
+    Value = _G.G_FastAttack,
+    Callback = function(v)
+        _G.G_FastAttack = v
+        SaveConfiguration()
+    end
+})
+
+PVvX7r[L("主要功能")]:Dropdown({
+    Title = L("快速攻擊模式"),
+    Values = {"模式1", "模式2(部分帳號失效用)"},
+    Value = _G.G_FastAttackMode,
+    Callback = function(v)
+        _G.G_FastAttackMode = v
+        SaveConfiguration()
+    end
+})
+-- ==========================================
 
 -- ==========================================
 -- 自动瞬步 (AutoSoru) 功能 - 新增
@@ -1897,28 +1846,34 @@ FOVTab:Paragraph({
 })
 
 FOVTab:Toggle({
-    Title = L("攻擊怪物(此頁面所有功能)"),
-    Value = _G.G_AttackMobs,
-    Callback = function(v) 
-        _G.G_AttackMobs = v 
-        SaveConfiguration()
-    end
-})
-
-FOVTab:Toggle({
-    Title = L("攻擊玩家(此頁面所有功能)"),
-    Value = _G.G_AttackPlayers,
-    Callback = function(v) 
-        _G.G_AttackPlayers = v 
-        SaveConfiguration()
-    end
-})
-
-FOVTab:Toggle({
     Title = L("槍械 m1"),
     Value = _G.G_DragonGunM1,
     Callback = function(v) 
         _G.G_DragonGunM1 = v 
+        SaveConfiguration()
+    end
+})
+
+FOVTab:Slider({
+    Title = L("龍槍攻速調整"),
+    Value = {
+        Min = 0,
+        Max = 200,
+        Default = math.floor((_G.G_DragonGunSpeed or 0.085) * 1000),
+        Decimals = 0
+    },
+    Callback = function(v)
+        _G.G_DragonGunSpeed = v / 1000
+        SaveConfiguration()
+    end
+})
+
+FOVTab:Toggle({
+    Title = L("果實m1"),
+    Value = _G.G_FruitM1,
+    Callback = function(vatt)
+        _G.G_FruitM1 = vatt
+        SetFruitM1Enabled(vatt)
         SaveConfiguration()
     end
 })
@@ -1971,20 +1926,6 @@ FOVTab:Toggle({
     Value = _G.G_SilentAimTeamCheck,
     Callback = function(v)
         _G.G_SilentAimTeamCheck = v
-        SaveConfiguration()
-    end
-})
-
-FOVTab:Slider({
-    Title = L("龍槍攻速調整"),
-    Value = {
-        Min = 0,
-        Max = 200,
-        Default = math.floor((_G.G_DragonGunSpeed or 0.085) * 1000),
-        Decimals = 0
-    },
-    Callback = function(v)
-        _G.G_DragonGunSpeed = v / 1000
         SaveConfiguration()
     end
 })
