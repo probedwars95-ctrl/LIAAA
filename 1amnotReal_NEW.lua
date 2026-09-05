@@ -63,6 +63,39 @@ _G.G_M1FireInterval_V2 = _G.G_M1FireInterval_V2 or 0.2
 _G.G_AttackMobs_V2 = _G.G_AttackMobs_V2 or false
 _G.G_AttackPlayers_V2 = _G.G_AttackPlayers_V2 or false
 
+-- ========== 新增传送功能（从 RJR 提取） ==========
+local TeleportLocations = {}
+local function SetupTeleportLocations()
+    local placeId = game.PlaceId
+    if placeId == 4442272183 or placeId == 79091703265657 then -- World2
+        TeleportLocations = {
+            ["豪宅"] = Vector3.new(-390, 332, 673),
+            ["天鹅房间"] = Vector3.new(2285, 15, 905),
+            ["鬼船"] = Vector3.new(923, 126, 32852),
+            ["僵尸岛"] = Vector3.new(-6509, 83, -133),
+        }
+    elseif placeId == 7449423635 or placeId == 100117331123089 then -- World3
+        TeleportLocations = {
+            ["海洋城堡"] = Vector3.new(-12463.6, 376.26, -7566.08),
+            ["海龟豪宅"] = Vector3.new(-5060.41, 316.43, -3192.30),
+            ["司法"] = Vector3.new(-5096.48, 316.43, -3177.91),
+            ["九头蛇"] = Vector3.new(-5027.03, 316.43, -3206.07),
+            ["P2"] = Vector3.new(5650.94482, 1034.45056, -350.383636),
+        }
+    else
+        TeleportLocations = {}
+    end
+end
+SetupTeleportLocations()
+
+local function RequestEntrance(pos)
+    local args = { "requestEntrance", pos }
+    pcall(function()
+        game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer(unpack(args))
+    end)
+end
+-- =================================================
+
 local Translations = {
     ["中文"] = {},
     ["English"] = {
@@ -256,8 +289,9 @@ local PVvX7r = {
     ["特別"]     = Tabs[L("主要功能")]:Tab({ Title = L("特別"), Icon = "star" }),
     [L("設置")]     = Tabs[L("設置")]:Tab({ Title = L("設置"), Icon = "settings" }),
     ["飛行與移動"] = Tabs[L("主要功能")]:Tab({ Title = "飛行與移動", Icon = "rocket" }),
-    -- ========== 新增 DragonGun Tab ==========
     ["DragonGun"] = Tabs[L("主要功能")]:Tab({ Title = "DragonGun", Icon = "crosshair" }),
+    -- ========== 新增传送 Tab ==========
+    ["传送"] = Tabs[L("主要功能")]:Tab({ Title = "传送", Icon = "map" }),
 }
 
 PVvX7r[L("公告")]:Paragraph({
@@ -2071,4 +2105,36 @@ end)
 -- ==========================================
 if _G.G_AutoSoru then 
     StartAutoSoru() 
+end
+
+-- ==========================================
+-- 新增传送 Tab 的内容（简体中文）
+-- ==========================================
+local TeleportTab = PVvX7r["传送"]
+
+if next(TeleportLocations) == nil then
+    TeleportTab:Paragraph({
+        Title = "提示",
+        Desc = "当前服务器不支持传送点（需在第二或第三世界）"
+    })
+else
+    TeleportTab:Paragraph({
+        Title = "快捷传送",
+        Desc = "点击下方按钮直接传送至指定位置"
+    })
+
+    for name, pos in pairs(TeleportLocations) do
+        TeleportTab:Button({
+            Title = name,
+            Icon = "map-pin",
+            Callback = function()
+                RequestEntrance(pos)
+                WindUI:Notify({
+                    Title = "传送",
+                    Content = "正在传送至 " .. name,
+                    Duration = 2
+                })
+            end
+        })
+    end
 end
