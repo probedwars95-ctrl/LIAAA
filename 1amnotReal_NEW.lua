@@ -290,7 +290,6 @@ local PVvX7r = {
     [L("設置")]     = Tabs[L("設置")]:Tab({ Title = L("設置"), Icon = "settings" }),
     ["飛行與移動"] = Tabs[L("主要功能")]:Tab({ Title = "飛行與移動", Icon = "rocket" }),
     ["DragonGun"] = Tabs[L("主要功能")]:Tab({ Title = "DragonGun", Icon = "crosshair" }),
-    -- ========== 新增传送 Tab ==========
     ["传送"] = Tabs[L("主要功能")]:Tab({ Title = "传送", Icon = "map" }),
 }
 
@@ -781,9 +780,6 @@ task.spawn(function()
     end
 end)
 
--- ==========================================
--- 主要功能标签页的控件
--- ==========================================
 PVvX7r[L("主要功能")]:Toggle({
     Title = L("自動武裝色"),
     Value = _G.G_AutoHaki,
@@ -812,7 +808,6 @@ PVvX7r[L("主要功能")]:Toggle({
     end
 })
 
--- ========== 从 PVP 移入的两个控件 ==========
 PVvX7r[L("主要功能")]:Toggle({
     Title = L("開啟快速攻擊"),
     Value = _G.G_FastAttack,
@@ -831,11 +826,7 @@ PVvX7r[L("主要功能")]:Dropdown({
         SaveConfiguration()
     end
 })
--- ==========================================
 
--- ==========================================
--- 自动瞬步 (AutoSoru) 功能 - 新增
--- ==========================================
 local AutoSoruConn = nil
 
 local function SoruTo(targetPosition)
@@ -903,7 +894,7 @@ local function StartAutoSoru()
     AutoSoruConn = task.spawn(function()
         while _G.G_AutoSoru do
             pcall(SoruToClosestPlayer)
-            task.wait(1)   -- 每秒一次，可自行调整
+            task.wait(1)
         end
     end)
 end
@@ -929,7 +920,6 @@ PVvX7r[L("主要功能")]:Toggle({
         SaveConfiguration()
     end
 })
--- ==========================================
 
 local FlyTab = PVvX7r["飛行與移動"]
 
@@ -1100,11 +1090,12 @@ FlyTab:Toggle({
     end
 })
 
+-- 此處已將飛行速度極限調整為 25
 FlyTab:Slider({
     Title = "飛行速度",
     Value = {
         Min = 1,
-        Max = 10,
+        Max = 25,
         Default = _G.G_FlySpeed or 1
     },
     Callback = function(v)
@@ -1819,9 +1810,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ==========================================
--- FOV（繪製）标签页的控件（已删除龙枪功能）
--- ==========================================
 local FOVTab = PVvX7r[L("繪製")]
 
 FOVTab:Paragraph({
@@ -1875,7 +1863,7 @@ FOVTab:Colorpicker({
     end
 })
 
-FOVTab:Divider()   -- 此分隔线现在直接连接自瞄设置部分
+FOVTab:Divider()
 
 FOVTab:Paragraph({
     Title = L("自瞄設置"),
@@ -1946,9 +1934,6 @@ FOVTab:Dropdown({
     end
 })
 
--- ============================================================
--- 独立 DragonGun Tab（完整保留）
--- ============================================================
 local DragonGunTab = PVvX7r["DragonGun"]
 
 DragonGunTab:Toggle({
@@ -1992,9 +1977,6 @@ DragonGunTab:Toggle({
     end
 })
 
--- ============================================================
--- DragonGun V2 核心循环（完整保留）
--- ============================================================
 task.spawn(function()
     local Modules = ReplicatedStorage:WaitForChild("Modules")
     local DragonNet = Modules:WaitForChild("Net")
@@ -2100,16 +2082,10 @@ task.spawn(function()
     end
 end)
 
--- ==========================================
--- 启动自动瞬步（若配置已开启）
--- ==========================================
 if _G.G_AutoSoru then 
     StartAutoSoru() 
 end
 
--- ==========================================
--- 新增传送 Tab 的内容（简体中文）
--- ==========================================
 local TeleportTab = PVvX7r["传送"]
 
 if next(TeleportLocations) == nil then
