@@ -23,6 +23,7 @@ _G.G_AutoV4           = _G.G_AutoV4 or false
 
 _G.G_AutoLowHpRace = _G.G_AutoLowHpRace or false
 _G.G_LowHpRaceChoice = _G.G_LowHpRaceChoice or "吸血鬼"
+_G.G_BringMob = _G.G_BringMob or false
 
 _G.G_ESPEnabled       = _G.G_ESPEnabled ~= false
 _G.G_ESP_Name         = _G.G_ESP_Name ~= false
@@ -183,6 +184,7 @@ local function CollectConfig()
             AutoLowHpRace  = _G.G_AutoLowHpRace,
             LowHpRaceChoice = _G.G_LowHpRaceChoice,
             AutoSoru       = _G.G_AutoSoru,
+            BringMob       = _G.G_BringMob,
         },
         ESP = {
             ESPEnabled   = _G.G_ESPEnabled,
@@ -1090,7 +1092,6 @@ FlyTab:Toggle({
     end
 })
 
--- 此處已將飛行速度極限調整為 25
 FlyTab:Slider({
     Title = "飛行速度",
     Value = {
@@ -1121,8 +1122,75 @@ FlyTab:Button({
     end
 })
 
+-- ================= 修改後的跟隨腳下聚怪（BringMob）邏輯 =================
+task.spawn(function()
+    while task.wait(5) do
+        if _G.G_BringMob then
+            pcall(function()
+                if sethiddenproperty then
+                    sethiddenproperty(LocalPlayer, "SimulationRadius", math.huge)
+                end
+            end)
+        end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(0.1) do
+        if _G.G_BringMob then
+            pcall(function()
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if not hrp then return end
+
+                local enemiesFolder = workspace:FindFirstChild("Enemies")
+                if not enemiesFolder then return end
+
+                -- 計算玩家腳下的目標位置（向下偏移 3 格）
+                local targetCFrame = hrp.CFrame * CFrame.new(0, -3, 0)
+                local myPos = hrp.Position
+
+                for _, v in ipairs(enemiesFolder:GetChildren()) do
+                    local hum = v:FindFirstChildOfClass("Humanoid")
+                    local root = v:FindFirstChild("HumanoidRootPart")
+
+                    if hum and root and hum.Health > 0 and v.Name ~= "Tyrant of the Skies" and not string.find(v.Name, "Boss") then
+                        -- 檢查怪物距離玩家是否在 500m（Studs）以內
+                        if (root.Position - myPos).Magnitude <= 500 then
+                            -- 持續將怪物傳送到你腳下的位置跟著你動
+                            root.CFrame = targetCFrame
+
+                            -- 凍結怪物速度與碰撞，避免干擾玩家
+                            root.AssemblyLinearVelocity = Vector3.zero
+                            root.AssemblyAngularVelocity = Vector3.zero
+                            root.CanCollide = false
+                            hum.WalkSpeed = 0
+                            hum.JumpPower = 0
+                            if hum:GetState() ~= Enum.HumanoidStateType.Seated then
+                                hum:ChangeState(Enum.HumanoidStateType.Physics)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+-- ==============================================================
+
 PVvX7r["特別"]:Dropdown({ Title = L("選擇低血量切換種族"), Values = { "吸血鬼", "機器人" }, Value = _G.G_LowHpRaceChoice, Callback = function(v) _G.G_LowHpRaceChoice = v; SaveConfiguration() end })
 PVvX7r["特別"]:Toggle({ Title = L("血量低於20%自動更換種族"), Value = _G.G_AutoLowHpRace, Callback = function(v) _G.G_AutoLowHpRace = v; SaveConfiguration() end })
+
+-- 將聚怪功能開關加入到「特別」分頁中
+PVvX7r["特別"]:Toggle({
+    Title = "聚怪功能 (BringMob)",
+    Desc = "將半徑500m內的周圍怪物自動拉到你的腳下跟著你移動並凍結",
+    Value = _G.G_BringMob,
+    Callback = function(v)
+        _G.G_BringMob = v
+        SaveConfiguration()
+    end
+})
 
 local mt = getrawmetatable(game)
 local oldNamecall = mt.__namecall
