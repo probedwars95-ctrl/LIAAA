@@ -1122,7 +1122,7 @@ FlyTab:Button({
     end
 })
 
--- ================= 修改後的跟隨腳下聚怪（BringMob）邏輯 =================
+-- ================= 修改後的跟隨腳下聚怪（BringMob）邏輯（範圍 250） =================
 task.spawn(function()
     while task.wait(5) do
         if _G.G_BringMob then
@@ -1155,8 +1155,8 @@ task.spawn(function()
                     local root = v:FindFirstChild("HumanoidRootPart")
 
                     if hum and root and hum.Health > 0 and v.Name ~= "Tyrant of the Skies" and not string.find(v.Name, "Boss") then
-                        -- 檢查怪物距離玩家是否在 500m（Studs）以內
-                        if (root.Position - myPos).Magnitude <= 500 then
+                        -- ★ 範圍改為 250 Studs
+                        if (root.Position - myPos).Magnitude <= 250 then
                             -- 持續將怪物傳送到你腳下的位置跟著你動
                             root.CFrame = targetCFrame
 
@@ -1181,10 +1181,10 @@ end)
 PVvX7r["特別"]:Dropdown({ Title = L("選擇低血量切換種族"), Values = { "吸血鬼", "機器人" }, Value = _G.G_LowHpRaceChoice, Callback = function(v) _G.G_LowHpRaceChoice = v; SaveConfiguration() end })
 PVvX7r["特別"]:Toggle({ Title = L("血量低於20%自動更換種族"), Value = _G.G_AutoLowHpRace, Callback = function(v) _G.G_AutoLowHpRace = v; SaveConfiguration() end })
 
--- 將聚怪功能開關加入到「特別」分頁中
+-- 聚怪功能開關（描述已更新為 250m）
 PVvX7r["特別"]:Toggle({
     Title = "聚怪功能 (BringMob)",
-    Desc = "將半徑500m內的周圍怪物自動拉到你的腳下跟著你移動並凍結",
+    Desc = "將半徑250m內的周圍怪物自動拉到你的腳下跟著你移動並凍結",
     Value = _G.G_BringMob,
     Callback = function(v)
         _G.G_BringMob = v
