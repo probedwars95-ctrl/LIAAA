@@ -2182,3 +2182,646 @@ else
         })
     end
 end
+
+-- =====================================================================
+-- ============ 鎖人功能移植（來源：RJR.lua）開始 =====================
+-- =====================================================================
+
+-- 變數初始化（若不存在才初始化，避免覆蓋已載入的 config）
+_G.G_TeleportOffsetX  = _G.G_TeleportOffsetX or 0
+_G.G_TeleportOffsetY  = _G.G_TeleportOffsetY or 0
+_G.G_TeleportOffsetZ  = _G.G_TeleportOffsetZ or 0
+_G.G_SelectPly        = _G.G_SelectPly or ""
+_G.G_TeleportPly      = _G.G_TeleportPly or false
+_G.G_Teleport         = _G.G_Teleport or false
+_G.G_Lock2            = _G.G_Lock2 or false
+_G.G_TeleportPredict  = _G.G_TeleportPredict or false
+_G.G_SpectatePlys     = _G.G_SpectatePlys or false
+-- 繞圈模式（過動兒）3D
+_G.G_OrbitEnabled     = _G.G_OrbitEnabled or false
+_G.G_OrbitSpeed       = _G.G_OrbitSpeed or 1080    -- 度/秒（1080 = 每秒 3 圈）
+_G.G_OrbitRadius      = _G.G_OrbitRadius or 6      -- 公尺
+_G.G_OrbitRange       = 50                         -- 觸發距離
+
+-- -------------------- 玩家列表 --------------------
+local function GetPlayerList()
+    local playerList = {}
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            table.insert(playerList, player.Name)
+        end
+    end
+    table.sort(playerList)
+    return playerList
+end
+
+-- -------------------- 碰撞控制（平滑傳送時使用） --------------------
+local function SetCollide()
+    local character = LocalPlayer.Character
+    if not character then return end
+    for _, v in ipairs(character:GetChildren()) do
+        if v:IsA("BasePart") then
+            v.CanCollide = true
+            v.CanTouch   = true
+            v.CanQuery   = true
+        end
+    end
+end
+
+local function SetNoCollide()
+    local character = LocalPlayer.Character
+    if not character then return end
+    for _, v in ipairs(character:GetChildren()) do
+        if v:IsA("BasePart") then
+            v.CanCollide = false
+            v.CanTouch   = true
+            v.CanQuery   = true
+        end
+    end
+end
+
+-- -------------------- 平滑傳送（Tween） --------------------
+local ActiveTween = nil
+
+local function topos(Pos)
+    if not LocalPlayer or not LocalPlayer.Character then return end
+    local HRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local Humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
+    if not HRP or not Humanoid then return end
+
+    HRP.AssemblyLinearVelocity  = Vector3.zero
+    HRP.AssemblyAngularVelocity = Vector3.zero
+    Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+
+    local Distance = (Pos.Position - HRP.Position).Magnitude
+    local Speed = 300
+
+    if ActiveTween then ActiveTween:Cancel() end
+
+    ActiveTween = TweenService:Create(
+        HRP,
+        TweenInfo.new(Distance / Speed, Enum.EasingStyle.Linear),
+        {CFrame = Pos}
+    )
+
+    local isActive = true
+    task.spawn(function()
+        while isActive and ActiveTween and ActiveTween.PlaybackState == Enum.PlaybackState.Playing do
+            SetNoCollide()
+            task.wait(0.001)
+        end
+    end)
+
+    ActiveTween:Play()
+
+    ActiveTween.Completed:Connect(function()
+        isActive = false
+        if Humanoid then
+            SetCollide()
+            Humanoid:ChangeState(Enum.HumanoidStateType.Running)
+        end
+    end)
+
+    task.delay(0.05, function()
+        if Humanoid then
+            Humanoid:ChangeState(Enum.HumanoidStateType.Running)
+        end
+    end)
+end
+
+local function StopTween()
+    if ActiveTween then
+        ActiveTween:Cancel()
+        ActiveTween = nil
+    end
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local bodyClip = LocalPlayer.Character.HumanoidRootPart:FindFirstChild("BodyClip")
+        if bodyClip then bodyClip:Destroy() end
+    end
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Highlight") then
+        LocalPlayer.Character.Highlight:Destroy()
+    end
+end
+
+-- -------------------- 偏移量驗證 --------------------
+local function validateOffset(val)
+    local num = tonumber(val)
+    if not num then return 0 end
+    return math.clamp(num, -3000, 3000)
+end
+
+-- -------------------- 預判（對抗飛行） --------------------
+local PredictLastPos = {}
+local PredictLastTick = {}
+local function GetPredictedCFrame(hrp)
+    local now = tick()
+    local playerKey = hrp
+    local baseCFrame = hrp.CFrame
+
+    if not _G.G_TeleportPredict then
+        PredictLastPos[playerKey] = hrp.Position
+        PredictLastTick[playerKey] = now
+        return baseCFrame
+    end
+
+    local velocity = hrp.AssemblyLinearVelocity
+    if velocity.Magnitude < 0.1 then
+        velocity = hrp.Velocity
+    end
+
+    local derivedVel = Vector3.zero
+    local lastPos = PredictLastPos[playerKey]
+    local lastTick = PredictLastTick[playerKey]
+    if lastPos and lastTick then
+        local dt = now - lastTick
+        if dt > 0 and dt < 1 then
+            derivedVel = (hrp.Position - lastPos) / dt
+        end
+    end
+    PredictLastPos[playerKey] = hrp.Position
+    PredictLastTick[playerKey] = now
+
+    local finalVel = velocity
+    if derivedVel.Magnitude > velocity.Magnitude then
+        finalVel = derivedVel
+    end
+
+    local speed = finalVel.Magnitude
+    local amount = 0.08 + speed * 0.0016
+    if amount > 0.5 then amount = 0.5 end
+
+    local predictedPos = hrp.Position + finalVel * amount
+    return CFrame.new(predictedPos) * (baseCFrame - baseCFrame.Position)
+end
+
+-- -------------------- 取得最近傳送入口 --------------------
+local function GetNearestEntranceToTarget(targetPos, myPos)
+    local bestName, bestPos = nil, nil
+    local bestDist = (targetPos - myPos).Magnitude
+    for name, pos in pairs(TeleportLocations) do
+        local d = (targetPos - pos).Magnitude
+        if d < bestDist then
+            bestDist = d
+            bestName = name
+            bestPos = pos
+        end
+    end
+    return bestName, bestPos
+end
+
+-- -------------------- 繞圈模式（過動兒）3D --------------------
+local OrbitConn = nil
+local OrbitTheta = 0     -- 水平角
+local OrbitPhi = 0       -- 垂直角
+local OrbitWasPlatformStand = false
+
+local function StartOrbit()
+    if OrbitConn then return end
+    OrbitTheta = 0
+    OrbitPhi = 0
+
+    local c0 = LocalPlayer.Character
+    local h0 = c0 and c0:FindFirstChildOfClass("Humanoid")
+    if h0 then OrbitWasPlatformStand = h0.PlatformStand end
+
+    OrbitConn = RunService.Heartbeat:Connect(function(dt)
+        if not _G.G_OrbitEnabled then return end
+
+        local TargetPlr = Players:FindFirstChild(_G.G_SelectPly)
+        if not TargetPlr or not TargetPlr.Character then return end
+        local tHRP = TargetPlr.Character:FindFirstChild("HumanoidRootPart")
+        if not tHRP then return end
+
+        local myChar = LocalPlayer.Character
+        local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if not myHRP then return end
+
+        local distance = (tHRP.Position - myHRP.Position).Magnitude
+        if distance > _G.G_OrbitRange then
+            local hum = myChar:FindFirstChildOfClass("Humanoid")
+            if hum then hum.PlatformStand = false end
+            return
+        end
+
+        -- 鎖住角色控制避免伺服器覆蓋 CFrame
+        local hum = myChar:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.PlatformStand = true
+            hum.WalkSpeed = 0
+            hum.JumpPower = 0
+        end
+        myHRP.AssemblyLinearVelocity  = Vector3.zero
+        myHRP.AssemblyAngularVelocity = Vector3.zero
+
+        local speed  = tonumber(_G.G_OrbitSpeed)  or 1080
+        local radius = tonumber(_G.G_OrbitRadius) or 6
+        if speed < 10 then speed = 10 end
+        if radius < 1 then radius = 1 end
+
+        -- ★ 關鍵：雙角度各自用不同倍率累加 → 產生 3D 亂繞
+        OrbitTheta = OrbitTheta + math.rad(speed) * dt
+        OrbitPhi   = OrbitPhi   + math.rad(speed * 0.618) * dt  -- 黃金比例，避免同步
+
+        while OrbitTheta >= math.pi * 2 do OrbitTheta = OrbitTheta - math.pi * 2 end
+        while OrbitPhi   >= math.pi * 2 do OrbitPhi   = OrbitPhi   - math.pi * 2 end
+
+        -- 球面座標 → 直角座標
+        local cosPhi = math.cos(OrbitPhi)
+        local offset = Vector3.new(
+            radius * cosPhi * math.cos(OrbitTheta),
+            radius * math.sin(OrbitPhi),
+            radius * cosPhi * math.sin(OrbitTheta)
+        )
+
+        myHRP.CFrame = CFrame.new(tHRP.Position + offset, tHRP.Position)
+    end)
+end
+
+local function StopOrbit()
+    if OrbitConn then
+        OrbitConn:Disconnect()
+        OrbitConn = nil
+    end
+    OrbitTheta = 0
+    OrbitPhi = 0
+    local myChar = LocalPlayer.Character
+    if myChar then
+        local hum = myChar:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.PlatformStand = OrbitWasPlatformStand
+            hum.WalkSpeed = 16
+            hum.JumpPower = 50
+        end
+    end
+end
+
+-- -------------------- 快捷鍵鎖人（H 鍵） --------------------
+local LockHotkeyLabel
+local LockHotkeyConn
+local LockHotkeyLoopConn
+local lockHotkeyActive = false
+local lockHotkeyTarget = nil
+local Lock2EntranceTick = 0
+
+local function LockHotkeyUpdateUI()
+    if LockHotkeyLabel then
+        if lockHotkeyActive and lockHotkeyTarget then
+            LockHotkeyLabel.Text = "正在鎖人: " .. lockHotkeyTarget.Name
+            LockHotkeyLabel.Visible = true
+        elseif lockHotkeyActive then
+            LockHotkeyLabel.Text = "正在鎖人..."
+            LockHotkeyLabel.Visible = true
+        else
+            LockHotkeyLabel.Visible = false
+        end
+    end
+end
+
+-- 先宣告，供 StartLoop 內部引用
+local LockHotkeyStopLoop
+
+local function LockHotkeyStartLoop()
+    lockHotkeyTarget = nil
+    local firstTarget = GetClosestTargetToMouse()  -- 已在原腳本中定義
+    if firstTarget then
+        local tc = firstTarget.Parent
+        if tc and tc:IsA("Model") then
+            lockHotkeyTarget = Players:GetPlayerFromCharacter(tc)
+        end
+    end
+    if not lockHotkeyTarget then return end
+
+    if LockHotkeyLoopConn then
+        LockHotkeyLoopConn:Disconnect()
+        LockHotkeyLoopConn = nil
+    end
+
+    lockHotkeyActive = true
+    LockHotkeyUpdateUI()
+    Lock2EntranceTick = 0
+    local VirtualUser = game:GetService("VirtualUser")
+
+    LockHotkeyLoopConn = RunService.Stepped:Connect(function()
+        if not lockHotkeyActive then
+            if LockHotkeyLoopConn then
+                LockHotkeyLoopConn:Disconnect()
+                LockHotkeyLoopConn = nil
+            end
+            return
+        end
+
+        pcall(function()
+            local tPlayer = lockHotkeyTarget
+            if not tPlayer or not tPlayer.Character then
+                LockHotkeyStopLoop()
+                return
+            end
+            local tHRP = tPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not tHRP then return end
+            local myChar = LocalPlayer.Character
+            local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            if not myHRP then return end
+
+            local targetCFrame = GetPredictedCFrame(tHRP)
+                + Vector3.new(_G.G_TeleportOffsetX, _G.G_TeleportOffsetY, _G.G_TeleportOffsetZ)
+
+            if _G.G_LockHotkeyMode == "鎖人2" or _G.G_LockHotkeyMode == "锁人2" then
+                local targetPos = targetCFrame.Position
+                local myPos = myHRP.Position
+                local distance = (targetPos - myPos).Magnitude
+
+                if math.abs(myPos.Y - targetPos.Y) > 0.5 then
+                    myHRP.CFrame = CFrame.new(myPos.X, targetPos.Y, myPos.Z)
+                end
+
+                if distance > 1000 and tick() - Lock2EntranceTick > 3 then
+                    local entName, entPos = GetNearestEntranceToTarget(targetPos, myPos)
+                    if entName and entPos then
+                        RequestEntrance(entPos)
+                        Lock2EntranceTick = tick()
+                        return
+                    end
+                end
+                if distance > 300 then
+                    topos(targetCFrame)
+                else
+                    StopTween()
+                    myHRP.CFrame = targetCFrame
+                end
+            else
+                myHRP.CFrame = targetCFrame
+                VirtualUser:CaptureController()
+                VirtualUser:Button1Down(Vector2.new(1280, 672))
+            end
+        end)
+    end)
+end
+
+LockHotkeyStopLoop = function()
+    lockHotkeyActive = false
+    if LockHotkeyLoopConn then
+        LockHotkeyLoopConn:Disconnect()
+        LockHotkeyLoopConn = nil
+    end
+    StopTween()
+    lockHotkeyTarget = nil
+    LockHotkeyUpdateUI()
+end
+
+local function StartLockHotkey()
+    if LockHotkeyConn then return end
+
+    pcall(function()
+        local old = LocalPlayer:FindFirstChild("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("LockHotkeyGui")
+        if old then old:Destroy() end
+    end)
+    pcall(function()
+        local old = game:GetService("CoreGui"):FindFirstChild("LockHotkeyGui")
+        if old and old ~= LockHotkeyLabel then old:Destroy() end
+    end)
+
+    if not LockHotkeyLabel then
+        local sgui = Instance.new("ScreenGui")
+        sgui.Name = "LockHotkeyGui"
+        sgui.Parent = LocalPlayer:FindFirstChild("PlayerGui") or game:GetService("CoreGui")
+        LockHotkeyLabel = Instance.new("TextLabel")
+        LockHotkeyLabel.Parent = sgui
+        LockHotkeyLabel.AnchorPoint = Vector2.new(0.5, 0)
+        LockHotkeyLabel.Position = UDim2.new(0.5, 0, 0, 5)
+        LockHotkeyLabel.Size = UDim2.new(0, 300, 0, 30)
+        LockHotkeyLabel.BackgroundTransparency = 1
+        LockHotkeyLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+        LockHotkeyLabel.TextStrokeTransparency = 0
+        LockHotkeyLabel.Font = Enum.Font.SourceSansBold
+        LockHotkeyLabel.TextSize = 20
+    end
+
+    LockHotkeyConn = UIS.InputBegan:Connect(function(input, gameProcessed)
+        if not _G.G_LockHotkey then return end
+        if gameProcessed then return end
+        if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+        if input.KeyCode.Name ~= "H" then return end
+        if lockHotkeyActive then
+            LockHotkeyStopLoop()
+        else
+            LockHotkeyStartLoop()
+        end
+    end)
+end
+
+local function StopLockHotkey()
+    LockHotkeyStopLoop()
+    if LockHotkeyConn then
+        LockHotkeyConn:Disconnect()
+        LockHotkeyConn = nil
+    end
+    if LockHotkeyLabel then
+        LockHotkeyLabel.Visible = false
+    end
+end
+
+-- =====================================================================
+-- ==================== UI 加入「主要功能」頁 ========================
+-- =====================================================================
+local LockTab = PVvX7r[L("主要功能")]
+
+LockTab:Divider()
+
+LockTab:Paragraph({
+    Title = "鎖人功能",
+    Desc = "選擇目標玩家後可使用平滑/直接傳送、觀戰、鎖人2 及快捷鍵鎖人（H 鍵）"
+})
+
+local LockPlayerDropdown = LockTab:Dropdown({
+    Title = "選擇目標玩家",
+    Values = GetPlayerList(),
+    Value = _G.G_SelectPly,
+    Callback = function(selectedValue)
+        if selectedValue and selectedValue ~= "" then
+            _G.G_SelectPly = selectedValue
+            WindUI:Notify({
+                Title = "選擇目標玩家",
+                Content = "已設置為 " .. selectedValue,
+                Duration = 2
+            })
+        else
+            _G.G_SelectPly = ""
+        end
+    end
+})
+
+LockTab:Button({
+    Title = "刷新玩家列表",
+    Callback = function()
+        local newPlayerList = GetPlayerList()
+        if LockPlayerDropdown and LockPlayerDropdown.Refresh then
+            LockPlayerDropdown:Refresh(newPlayerList, true)
+        end
+        if _G.G_SelectPly ~= "" and LockPlayerDropdown and LockPlayerDropdown.SetValue then
+            for _, name in ipairs(newPlayerList) do
+                if name == _G.G_SelectPly then
+                    pcall(function() LockPlayerDropdown:SetValue(_G.G_SelectPly) end)
+                    break
+                end
+            end
+        end
+        WindUI:Notify({ Title = "刷新玩家列表", Content = "載入完成", Duration = 2 })
+    end
+})
+
+local TeleportPlyConnection
+
+LockTab:Toggle({
+    Title = "平滑傳送至玩家",
+    Value = _G.G_TeleportPly,
+    Callback = function(value)
+        _G.G_TeleportPly = value
+        if value and _G.G_SelectPly == "" then
+            WindUI:Notify({ Title = "操作失敗", Content = "請先選擇目標玩家", Duration = 2 })
+            _G.G_TeleportPly = false
+            return
+        end
+
+        if TeleportPlyConnection then
+            TeleportPlyConnection:Disconnect()
+            TeleportPlyConnection = nil
+        end
+
+        if value then
+            WindUI:Notify({
+                Title = "傳送開啟",
+                Content = "已開始傳送（偏移X:".._G.G_TeleportOffsetX.." Y:".._G.G_TeleportOffsetY.." Z:".._G.G_TeleportOffsetZ.."）",
+                Duration = 2
+            })
+
+            TeleportPlyConnection = RunService.Stepped:Connect(function()
+                if not _G.G_TeleportPly then
+                    if TeleportPlyConnection then
+                        TeleportPlyConnection:Disconnect()
+                        TeleportPlyConnection = nil
+                    end
+                    return
+                end
+
+                local TargetPlr = Players:FindFirstChild(_G.G_SelectPly)
+                if not TargetPlr or not TargetPlr.Character or not TargetPlr.Character:FindFirstChild("HumanoidRootPart") then
+                    return
+                end
+
+                local targetCFrame = TargetPlr.Character.HumanoidRootPart.CFrame
+                    + Vector3.new(_G.G_TeleportOffsetX, _G.G_TeleportOffsetY, _G.G_TeleportOffsetZ)
+                topos(targetCFrame)
+            end)
+        else
+            if TeleportPlyConnection then
+                TeleportPlyConnection:Disconnect()
+                TeleportPlyConnection = nil
+            end
+            StopTween()
+            WindUI:Notify({ Title = "傳送關閉", Content = "已停止傳送目標玩家", Duration = 2 })
+        end
+    end
+})
+
+LockTab:Dropdown({
+    Title = "快捷鍵鎖人模式",
+    Values = {"鎖人1", "鎖人2"},
+    Value = _G.G_LockHotkeyMode,
+    Callback = function(v)
+        _G.G_LockHotkeyMode = v
+    end
+})
+
+LockTab:Input({
+    Title = "X軸偏移",
+    Value = tostring(_G.G_TeleportOffsetX),
+    Placeholder = "-3000 ~ 3000",
+    Callback = function(inputVal)
+        _G.G_TeleportOffsetX = validateOffset(inputVal)
+    end
+})
+
+LockTab:Input({
+    Title = "Y軸偏移",
+    Value = tostring(_G.G_TeleportOffsetY),
+    Placeholder = "-3000 ~ 3000",
+    Callback = function(inputVal)
+        _G.G_TeleportOffsetY = validateOffset(inputVal)
+    end
+})
+
+LockTab:Input({
+    Title = "Z軸偏移",
+    Value = tostring(_G.G_TeleportOffsetZ),
+    Placeholder = "-3000 ~ 3000",
+    Callback = function(inputVal)
+        _G.G_TeleportOffsetZ = validateOffset(inputVal)
+    end
+})
+
+-- ==================== 繞圈模式（過動兒）3D ====================
+LockTab:Divider()
+
+LockTab:Paragraph({
+    Title = "繞圈模式（過動兒）3D",
+    Desc = "開啟並選好目標玩家後：目標在 50 公尺內時，會以極快速度在 3D 球面上不斷亂繞（上下左右全方位）"
+})
+
+LockTab:Toggle({
+    Title = "開啟繞圈模式",
+    Value = _G.G_OrbitEnabled,
+    Callback = function(v)
+        _G.G_OrbitEnabled = v
+        if v then
+            if _G.G_SelectPly == "" then
+                WindUI:Notify({ Title = "操作失敗", Content = "請先選擇目標玩家", Duration = 2 })
+                _G.G_OrbitEnabled = false
+                return
+            end
+            StartOrbit()
+            WindUI:Notify({
+                Title = "繞圈開啟",
+                Content = "50 公尺內將在 3D 球面高速亂繞",
+                Duration = 2
+            })
+        else
+            StopOrbit()
+            WindUI:Notify({ Title = "繞圈關閉", Content = "已停止繞圈", Duration = 2 })
+        end
+    end
+})
+
+LockTab:Slider({
+    Title = "繞圈速度（度/秒）",
+    Step = 10,
+    Value = {
+        Min = 60,
+        Max = 2880,
+        Default = _G.G_OrbitSpeed or 1080
+    },
+    Callback = function(v)
+        _G.G_OrbitSpeed = v
+    end
+})
+
+LockTab:Slider({
+    Title = "繞圈半徑（公尺）",
+    Step = 1,
+    Value = {
+        Min = 2,
+        Max = 100,
+        Default = _G.G_OrbitRadius or 6
+    },
+    Callback = function(v)
+        _G.G_OrbitRadius = v
+    end
+})
+
+-- 若之前已開啟繞圈模式，補掛載
+if _G.G_OrbitEnabled then
+    StartOrbit()
+end
+
+-- =====================================================================
+-- ============ 鎖人功能移植結束 =======================================
+-- =====================================================================
