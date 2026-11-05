@@ -58,7 +58,7 @@ _G.G_AutoSaveConfig   = _G.G_AutoSaveConfig or false
 _G.G_Theme            = _G.G_Theme or "Light"
 _G.G_Language         = _G.G_Language or "中文"
 
--- ========== 傳送功能變數 ==========
+-- ========== 傳送功能變數（不納入儲存） ==========
 _G.G_TweenSpeed = _G.G_TweenSpeed or 180
 _G.G_Lock2 = _G.G_Lock2 or false
 _G.G_TweenNearest = _G.G_TweenNearest or false
@@ -68,7 +68,10 @@ _G.G_SelectPly = _G.G_SelectPly or ""
 _G.G_TeleportOffsetX = _G.G_TeleportOffsetX or 0
 _G.G_TeleportOffsetY = _G.G_TeleportOffsetY or 0
 _G.G_TeleportOffsetZ = _G.G_TeleportOffsetZ or 0
--- ===================================
+_G.G_TeleportLock = _G.G_TeleportLock or false
+_G.G_TeleportLockRange = 300 -- 固定 300 公尺
+_G.TeleportLocking = false
+-- ===============================================
 
 -- ========== 新增 DragonGun 獨立變數（V2） ==========
 _G.G_DragonGunM1_V2 = _G.G_DragonGunM1_V2 or false
@@ -145,6 +148,7 @@ local function L(text)
     return text
 end
 
+-- Setting 中移除所有傳送相關欄位；新增 DragonGun 區段
 local function CollectConfig()
     return {
         Attack = {
@@ -194,18 +198,15 @@ local function CollectConfig()
             LockHotkey             = _G.G_LockHotkey,
             LockHotkeyMode         = _G.G_LockHotkeyMode,
         },
+        DragonGun = {
+            DragonGunM1_V2   = _G.G_DragonGunM1_V2,
+            M1FireInterval_V2 = _G.G_M1FireInterval_V2,
+            AttackMobs_V2    = _G.G_AttackMobs_V2,
+            AttackPlayers_V2 = _G.G_AttackPlayers_V2,
+        },
         Setting = {
             AutoLoadConfig = _G.G_AutoLoadConfig,
             AutoSaveConfig = _G.G_AutoSaveConfig,
-            TweenSpeed = _G.G_TweenSpeed,
-            Lock2 = _G.G_Lock2,
-            TweenNearest = _G.G_TweenNearest,
-            SpectatePlys = _G.G_SpectatePlys,
-            TeleportPly = _G.G_TeleportPly,
-            SelectPly = _G.G_SelectPly,
-            TeleportOffsetX = _G.G_TeleportOffsetX,
-            TeleportOffsetY = _G.G_TeleportOffsetY,
-            TeleportOffsetZ = _G.G_TeleportOffsetZ,
         },
         UI = {
             Theme = _G.G_Theme,
@@ -824,7 +825,7 @@ local function SoruTo(targetPosition)
     if not Character then return end
 
     local HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
-    local Humanoid = Character:FindFirstChild("Humanoid")
+    local Humanoid = Character:FindFirstChildOfClass("Humanoid")
     if not HumanoidRootPart or not Humanoid or Humanoid.Health <= 0 then return end
 
     local startCFrame = HumanoidRootPart.CFrame
@@ -1004,6 +1005,7 @@ local function startFlying()
     local baseSpeed = 50
 
     flyConnection = RunService.RenderStepped:Connect(function()
+        if _G.TeleportLocking then return end -- ★ 瞬移防回朔期间暂停飞行更新
         if not flying or not rootPart or not rootPart.Parent or not hum or hum.Health <= 0 then
             stopFlying()
             return
@@ -1134,8 +1136,6 @@ task.spawn(function()
                 local enemiesFolder = workspace:FindFirstChild("Enemies")
                 if not enemiesFolder then return end
 
-                -- ★ 修改：將怪物聚集在腳底，而不是身上
-                -- 透過取得 HumanoidRootPart 的 Y 軸大小來計算真正的腳底位置
                 local legOffset = -hrp.Size.Y / 2 - 2 
                 local targetCFrame = hrp.CFrame * CFrame.new(0, legOffset, 0)
                 local myPos = hrp.Position
@@ -1988,7 +1988,7 @@ DragonGunTab:Toggle({
     Value = _G.G_DragonGunM1_V2,
     Callback = function(v) 
         _G.G_DragonGunM1_V2 = v
-        SaveConfiguration()
+        if _G.G_AutoSaveConfig then SaveConfiguration() end
     end
 })
 
@@ -2002,7 +2002,7 @@ DragonGunTab:Slider({
     },
     Callback = function(v)
         _G.G_M1FireInterval_V2 = v
-        SaveConfiguration()
+        if _G.G_AutoSaveConfig then SaveConfiguration() end
     end
 })
 
@@ -2011,7 +2011,7 @@ DragonGunTab:Toggle({
     Value = _G.G_AttackMobs_V2,
     Callback = function(v) 
         _G.G_AttackMobs_V2 = v
-        SaveConfiguration()
+        if _G.G_AutoSaveConfig then SaveConfiguration() end
     end
 })
 
@@ -2020,7 +2020,7 @@ DragonGunTab:Toggle({
     Value = _G.G_AttackPlayers_V2,
     Callback = function(v) 
         _G.G_AttackPlayers_V2 = v
-        SaveConfiguration()
+        if _G.G_AutoSaveConfig then SaveConfiguration() end
     end
 })
 
@@ -2252,7 +2252,6 @@ local function validateOffset_RJR(val)
     return math.clamp(num, -3000, 3000)
 end
 
--- ========== 安全區位置定義（用於「傳送至最近玩家」過濾） ==========
 local SafeZonePositions = {
     World1 = {
         { pos = Vector3.new(-3000, 250, 2057), radius = 700 },
@@ -2304,14 +2303,12 @@ local function IsInSafeZone(plr)
     end
     return false
 end
--- =================================================================
 
 local function DirectTeleport_RJR(pos)
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp or not pos then return false end
 
-    -- 傳送前關閉碰撞（穿牆）
     SetNoCollide_RJR()
     pcall(function()
         hrp.AssemblyLinearVelocity = Vector3.zero
@@ -2324,7 +2321,6 @@ local function DirectTeleport_RJR(pos)
         pcall(function()
             ReplicatedStorage.Remotes.CommF_:InvokeServer("requestEntrance", pos)
         end)
-        -- 傳送後維持穿牆 1.5 秒，避免落地卡進建築物
         task.wait(1.5)
         SetCollide_RJR()
     end)
@@ -2374,7 +2370,6 @@ do
                 local bestDist = math.huge
                 for _, p in ipairs(Players:GetPlayers()) do
                     if p ~= LocalPlayer then
-                        -- 過濾：PvP 關閉 / 安全區內 / 盟友
                         local skip = false
                         if p:GetAttribute("PvpDisabled") == true then skip = true end
                         if not skip and IsInSafeZone(p) then skip = true end
@@ -2428,6 +2423,161 @@ do
     ChaseAPI.Stop = ChaseStop
 end
 
+-- ============== 瞬移鎖人 核心邏輯 (固定 300m，100%防回朔，5次刷新機制) ==============
+local teleportCount = 0
+
+local function TeleportRefresh()
+    _G.TeleportLocking = true
+    pcall(function()
+        local myChar = LocalPlayer.Character
+        local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+        if myHRP and myHum then
+            myHRP.AssemblyLinearVelocity = Vector3.zero
+            myHRP.AssemblyAngularVelocity = Vector3.zero
+            -- 切换网络所有权，强制服务器重新同步位置
+            myHRP:SetNetworkOwner(nil)
+            task.wait(0.1)
+            myHRP:SetNetworkOwner(LocalPlayer)
+            -- 发送原地 Soru 重置服务器端的位移状态
+            pcall(function()
+                ReplicatedStorage.Remotes.CommE:FireServer(
+                    "Soru",
+                    myHRP.CFrame,
+                    myHRP.CFrame,
+                    workspace:GetServerTimeNow(),
+                    math.random(1, 999999999)
+                )
+            end)
+            pcall(function()
+                ReplicatedStorage.Remotes.CommF_:InvokeServer("requestEntrance", myHRP.Position)
+            end)
+            myHum:ChangeState(Enum.HumanoidStateType.Running)
+        end
+    end)
+    task.wait(0.1)
+    _G.TeleportLocking = false
+end
+
+local function TeleportLockExecute()
+    if teleportCount >= 5 then
+        TeleportRefresh()
+        teleportCount = 0
+        return
+    end
+
+    local targetPlr = nil
+    
+    if _G.G_SelectPly ~= "" and _G.G_SelectPly ~= nil then
+        targetPlr = Players:FindFirstChild(_G.G_SelectPly)
+    end
+    
+    if not targetPlr and _G.G_TweenNearest then
+        local myChar = LocalPlayer.Character
+        local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if myHRP then
+            local bestDist = math.huge
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer then
+                    local skip = false
+                    if p:GetAttribute("PvpDisabled") == true then skip = true end
+                    if not skip and IsInSafeZone(p) then skip = true end
+                    if not skip and IsSilentAimAlly(p) then skip = true end
+                    if not skip then
+                        local c = p.Character
+                        local h = c and c:FindFirstChild("HumanoidRootPart")
+                        local hum = c and c:FindFirstChildOfClass("Humanoid")
+                        if h and hum and hum.Health > 0 then
+                            local d = (h.Position - myHRP.Position).Magnitude
+                            if d < bestDist then bestDist, targetPlr = d, p end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if not targetPlr then return end
+    local targetChar = targetPlr.Character
+    local targetHum  = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
+    local targetHRP  = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+    if not targetHRP or not targetHum or targetHum.Health <= 0 then return end
+
+    local myChar = LocalPlayer.Character
+    local myHRP  = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local myHum  = myChar and myChar:FindFirstChildOfClass("Humanoid")
+    if not myHRP or not myHum or myHum.Health <= 0 then return end
+
+    -- 固定 300 公尺
+    local dist = (myHRP.Position - targetHRP.Position).Magnitude
+    if dist > 300 then return end
+    if dist < 3 then return end -- 已经非常近，不需要重复瞬移
+
+    _G.TeleportLocking = true
+
+    -- 清理飞行速度防止物理拉回
+    local bv = myHRP:FindFirstChild("FlyBodyVelocity")
+    if bv then bv.velocity = Vector3.zero end
+
+    local startCFrame = myHRP.CFrame
+    local finalCFrame = (startCFrame - startCFrame.Position) + targetHRP.Position + Vector3.new(0, myHRP.Size.Y * 1.5, 0)
+
+    -- 1. 发送合法位移请求
+    pcall(function()
+        ReplicatedStorage.Remotes.CommE:FireServer(
+            "Soru",
+            startCFrame,
+            finalCFrame,
+            workspace:GetServerTimeNow(),
+            math.random(1, 999999999)
+        )
+    end)
+    
+    -- 2. 发送同步请求
+    task.spawn(function()
+        pcall(function()
+            ReplicatedStorage.Remotes.CommF_:InvokeServer("requestEntrance", finalCFrame.Position)
+        end)
+    end)
+
+    -- 3. 本地强制位移与状态
+    myHRP.AssemblyLinearVelocity  = Vector3.zero
+    myHRP.AssemblyAngularVelocity = Vector3.zero
+    myHum:ChangeState(Enum.HumanoidStateType.Physics)
+    myHRP.CFrame = finalCFrame
+
+    -- 4. 高频锁定防回朔（0.35秒）
+    local lockEnd = tick() + 0.35
+    local lockConn
+    lockConn = RunService.Heartbeat:Connect(function()
+        if tick() > lockEnd or not myHRP or not myHRP.Parent then
+            if lockConn then lockConn:Disconnect() end
+            _G.TeleportLocking = false
+            if myHum and myHum.Parent then
+                myHum:ChangeState(Enum.HumanoidStateType.Running)
+            end
+            return
+        end
+        if myHRP then
+            myHRP.AssemblyLinearVelocity  = Vector3.zero
+            myHRP.AssemblyAngularVelocity = Vector3.zero
+            myHRP.CFrame = finalCFrame
+        end
+    end)
+
+    teleportCount = teleportCount + 1
+end
+
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        if _G.G_TeleportLock then
+            pcall(TeleportLockExecute)
+        end
+    end
+end)
+-- =================================================
+
 local TeleportTab = PVvX7r["傳送"]
 
 local PlayerDropdown_RJR = TeleportTab:Dropdown({
@@ -2441,7 +2591,6 @@ local PlayerDropdown_RJR = TeleportTab:Dropdown({
         else
             _G.G_SelectPly = ""
         end
-        SaveConfiguration()
     end
 })
 
@@ -2491,7 +2640,6 @@ TeleportTab:Toggle({
                 WindUI:Notify({ Title = "觀戰結束", Content = "已恢復本地視角", Duration = 2 })
             end
         end)
-        SaveConfiguration()
     end
 })
 
@@ -2544,7 +2692,6 @@ TeleportTab:Toggle({
             StopTween_RJR()
             WindUI:Notify({ Title = "傳送關閉", Content = "已停止傳送目標玩家", Duration = 2 })
         end
-        SaveConfiguration()
     end
 })
 
@@ -2566,7 +2713,6 @@ TeleportTab:Toggle({
             ChaseAPI.Stop()
             WindUI:Notify({ Title = "鎖人2關閉", Content = "已停止鎖定目標", Duration = 2 })
         end
-        SaveConfiguration()
     end
 })
 
@@ -2584,9 +2730,32 @@ TeleportTab:Toggle({
             ChaseAPI.Stop()
             WindUI:Notify({ Title = "最近玩家傳送關閉", Content = "已停止鎖定目標", Duration = 2 })
         end
-        SaveConfiguration()
     end
 })
+
+-- ★ 瞬移鎖人 UI 更新 (固定 300 公尺，移除滑条)
+TeleportTab:Toggle({
+    Title = "瞬移鎖人",
+    Desc = "每 0.3 秒檢測一次距離，若距離 ≤ 300 公尺則自動硬瞬移並防回朔（支援選擇玩家或聯動最近玩家）",
+    Value = _G.G_TeleportLock,
+    Callback = function(value)
+        _G.G_TeleportLock = value
+        if value then
+            if _G.G_SelectPly == "" and not _G.G_TweenNearest then
+                WindUI:Notify({ Title = "操作提示", Content = "未選擇玩家，請開啟「傳送至最近玩家」以自動聯動最近玩家", Duration = 3 })
+            end
+            _G.G_Lock2 = false
+            WindUI:Notify({
+                Title = "瞬移鎖人開啟",
+                Content = "每 0.3 秒檢測，距離 ≤ 300 公尺時自動瞬移並防止回朔",
+                Duration = 2
+            })
+        else
+            WindUI:Notify({ Title = "瞬移鎖人關閉", Content = "已停止自動瞬移", Duration = 2 })
+        end
+    end
+})
+-- =======================================
 
 if _G.G_Lock2 and _G.G_SelectPly ~= "" then
     ChaseAPI.Start("player")
@@ -2603,7 +2772,6 @@ TeleportTab:Slider({
     },
     Callback = function(value)
         _G.G_TweenSpeed = value
-        SaveConfiguration()
     end
 })
 
@@ -2615,7 +2783,6 @@ TeleportTab:Input({
     Placeholder = "-3000 - 3000",
     Callback = function(inputVal)
         _G.G_TeleportOffsetX = validateOffset_RJR(inputVal)
-        SaveConfiguration()
     end
 })
 
@@ -2625,7 +2792,6 @@ TeleportTab:Input({
     Placeholder = "-3000 - 3000",
     Callback = function(inputVal)
         _G.G_TeleportOffsetY = validateOffset_RJR(inputVal)
-        SaveConfiguration()
     end
 })
 
@@ -2635,7 +2801,6 @@ TeleportTab:Input({
     Placeholder = "-3000 - 3000",
     Callback = function(inputVal)
         _G.G_TeleportOffsetZ = validateOffset_RJR(inputVal)
-        SaveConfiguration()
     end
 })
 
